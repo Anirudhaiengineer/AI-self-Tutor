@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pymongo
+numpy<2
+soundcard
+SpeechRecognition
+openai-whisper
+openai
+python-dotenv

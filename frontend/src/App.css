@@ -1,0 +1,509 @@
+#root {
+  min-height: 100vh;
+}
+
+.auth-shell,
+.dashboard-shell {
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.solo-auth {
+  display: grid;
+  place-items: center;
+}
+
+.auth-page,
+.transcript-panel,
+.dashboard-topbar,
+.summary-card,
+.chat-card {
+  border-radius: 28px;
+  box-shadow: 0 24px 60px rgba(73, 49, 24, 0.16);
+  backdrop-filter: blur(14px);
+}
+
+.auth-page {
+  width: min(100%, 680px);
+  padding: 32px;
+  background: rgba(255, 248, 239, 0.82);
+}
+
+.planner-page {
+  width: min(100%, 820px);
+}
+
+.schedule-choice-page {
+  width: min(100%, 760px);
+}
+
+.workspace-layout {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 24px;
+}
+
+.dashboard-topbar {
+  grid-column: 1 / -1;
+  padding: 24px 28px;
+  background: rgba(255, 248, 239, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.recorder-card,
+.summary-card,
+.chat-card {
+  padding: 28px;
+}
+
+.schedule-card {
+  min-height: 100%;
+}
+
+.recorder-card {
+  background: rgba(34, 27, 20, 0.9);
+  color: #f7ecde;
+}
+
+.summary-card {
+  background: rgba(255, 248, 239, 0.82);
+  color: #2f241b;
+}
+
+.chat-card {
+  grid-column: 1 / -1;
+  background: rgba(62, 49, 37, 0.92);
+  color: #f7ecde;
+}
+
+.dashboard-title,
+h1,
+h2 {
+  margin: 0;
+  color: inherit;
+}
+
+h1 {
+  font-size: clamp(2.2rem, 4.2vw, 4rem);
+  line-height: 0.96;
+  max-width: 12ch;
+}
+
+.dashboard-title {
+  max-width: none;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+}
+
+h2 {
+  font-size: 1.8rem;
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.8rem;
+  color: #9c5d2a;
+}
+
+.hero-copy,
+.panel-copy,
+.summary-copy {
+  margin: 18px 0 0;
+  color: #54493d;
+}
+
+.light-copy {
+  color: #ddc9b3;
+}
+
+.mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  padding: 8px;
+  border-radius: 18px;
+  background: rgba(34, 27, 20, 0.08);
+  margin-top: 24px;
+}
+
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.choice-card {
+  text-align: left;
+  padding: 22px;
+  border: 0;
+  border-radius: 24px;
+  cursor: pointer;
+  background: linear-gradient(180deg, rgba(255, 248, 239, 0.98), rgba(245, 232, 216, 0.94));
+  color: #2f241b;
+  box-shadow: 0 18px 40px rgba(73, 49, 24, 0.12);
+}
+
+.choice-card strong {
+  display: block;
+  margin-top: 10px;
+  font-size: 1.2rem;
+}
+
+.choice-card p {
+  margin: 10px 0 0;
+  color: #5d4b3d;
+}
+
+.choice-label {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: #9c5d2a;
+  font-size: 0.75rem;
+}
+
+.mode-switch button,
+.submit-button,
+.record-button,
+.ghost-button {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.mode-switch button {
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: transparent;
+  color: #3d2d1f;
+}
+
+.mode-switch button.active {
+  background: #f1b26b;
+  color: #2b1f15;
+  font-weight: 700;
+}
+
+.auth-form,
+.chat-form {
+  margin-top: 24px;
+  display: grid;
+  gap: 16px;
+}
+
+.auth-form label,
+.transcript-box,
+.date-row {
+  display: grid;
+  gap: 8px;
+}
+
+.date-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.auth-form input,
+.transcript-box textarea,
+.chat-form textarea,
+.date-row input {
+  width: 100%;
+  padding: 15px 16px;
+  border-radius: 16px;
+  outline: none;
+  font: inherit;
+}
+
+.auth-form input,
+.date-row input {
+  border: 1px solid rgba(60, 46, 34, 0.16);
+  background: rgba(255, 255, 255, 0.7);
+  color: #2f241b;
+}
+
+.auth-form input:focus,
+.chat-form textarea:focus,
+.date-row input:focus {
+  border-color: #d97b34;
+  box-shadow: 0 0 0 4px rgba(217, 123, 52, 0.12);
+}
+
+.submit-button,
+.record-button,
+.ghost-button {
+  padding: 16px 18px;
+  border-radius: 18px;
+  font-weight: 700;
+}
+
+.submit-button {
+  margin-top: 8px;
+  background: linear-gradient(135deg, #f1b26b 0%, #d97b34 100%);
+  color: #24160d;
+}
+
+.ghost-button {
+  background: rgba(34, 27, 20, 0.08);
+  color: #2f241b;
+}
+
+.message {
+  margin: 18px 0 0;
+  padding: 14px 16px;
+  border-radius: 16px;
+}
+
+.message.error {
+  background: rgba(179, 59, 59, 0.22);
+  color: #ffd7d7;
+}
+
+.message.success {
+  background: rgba(54, 149, 95, 0.22);
+  color: #216341;
+}
+
+.message.warning {
+  background: rgba(241, 178, 107, 0.16);
+  color: #ffe2bf;
+}
+
+.goal-input {
+  min-height: 140px;
+  resize: vertical;
+  border: 1px solid rgba(60, 46, 34, 0.16);
+  background: rgba(255, 255, 255, 0.7);
+  color: #2f241b;
+}
+
+.recorder-header,
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.recording-pill {
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ddc9b3;
+}
+
+.recording-pill.live {
+  background: rgba(213, 83, 83, 0.24);
+  color: #ffd9d9;
+}
+
+.recorder-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.record-button {
+  flex: 1;
+}
+
+.record-button.start {
+  background: linear-gradient(135deg, #7adf9b 0%, #2f9d62 100%);
+  color: #143321;
+}
+
+.record-button.stop {
+  background: linear-gradient(135deg, #f4a1a1 0%, #d55353 100%);
+  color: #3d1313;
+}
+
+.record-button:disabled,
+.submit-button:disabled,
+.choice-card:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.service-meta {
+  margin-top: 18px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border-radius: 18px;
+  color: #efe3d4;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.transcript-box {
+  margin-top: 18px;
+}
+
+.transcript-box span {
+  color: #ddc9b3;
+}
+
+.transcript-box textarea,
+.chat-form textarea {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff7ef;
+  resize: vertical;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.plan-preview {
+  margin-top: 24px;
+  display: grid;
+  gap: 18px;
+}
+
+.light-surface {
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 22px;
+  padding: 16px;
+}
+
+.slot-list {
+  display: grid;
+  gap: 12px;
+}
+
+.slot-item {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.light-slot {
+  background: rgba(255, 248, 239, 0.88);
+  color: #2f241b;
+}
+
+.slot-item small {
+  opacity: 0.82;
+}
+
+.active-slot {
+  outline: 2px solid rgba(241, 178, 107, 0.9);
+  box-shadow: 0 0 0 4px rgba(241, 178, 107, 0.14);
+}
+
+.keyword-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.keyword-chip {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(217, 123, 52, 0.14);
+  color: #8f4f1f;
+  font-size: 0.92rem;
+}
+
+.highlight-list {
+  margin-top: 18px;
+  display: grid;
+  gap: 12px;
+}
+
+.highlight-item {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.chat-log {
+  margin-top: 20px;
+  display: grid;
+  gap: 12px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.chat-bubble {
+  max-width: 80%;
+  padding: 14px 16px;
+  border-radius: 18px;
+  white-space: pre-wrap;
+}
+
+.chat-bubble.user {
+  justify-self: end;
+  background: linear-gradient(135deg, #f1b26b 0%, #d97b34 100%);
+  color: #24160d;
+}
+
+.chat-bubble.assistant {
+  justify-self: start;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f7ecde;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 12, 9, 0.62);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  z-index: 30;
+}
+
+.modal-card {
+  width: min(100%, 560px);
+  padding: 28px;
+  border-radius: 28px;
+  background: rgba(255, 248, 239, 0.98);
+  color: #2f241b;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.28);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 24px;
+}
+
+.modal-actions .submit-button,
+.modal-actions .record-button {
+  flex: 1 1 140px;
+}
+
+@media (max-width: 960px) {
+  .workspace-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-card,
+  .dashboard-topbar {
+    grid-column: auto;
+  }
+
+  .dashboard-topbar,
+  .recorder-header,
+  .recorder-actions,
+  .card-header,
+  .modal-actions,
+  .choice-grid,
+  .date-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .choice-grid,
+  .date-row {
+    grid-template-columns: 1fr;
+  }
+
+  h1 {
+    max-width: none;
+  }
+}
