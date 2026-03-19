@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
-const API_BASE_URL = 'http://127.0.0.1:8000'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
 const initialFormState = {
   name: '',
@@ -10,7 +10,26 @@ const initialFormState = {
 }
 
 const emptyPlan = { goal: '', accepted: false, slots: [], calendar: [], schedule_type: 'short' }
+const emptyMonitor = {
+  status: 'idle',
+  score: 0,
+  message: '',
+  matched_terms: [],
+  missing_terms: [],
+  active_slot: null,
+  evidence: [],
+}
 
+const emptyDiagnostic = {
+  session_id: '',
+  goal: '',
+  current_index: 0,
+  total_questions: 0,
+  finished: false,
+  question: null,
+  answers: [],
+  scores: [],
+}
 function App() {
   const [mode, setMode] = useState('login')
   const [page, setPage] = useState('auth')
@@ -26,11 +45,19 @@ function App() {
   const [planLoading, setPlanLoading] = useState(false)
   const [planError, setPlanError] = useState('')
   const [learningPlan, setLearningPlan] = useState(emptyPlan)
+  const [learningPlans, setLearningPlans] = useState([])
   const [serviceStatus, setServiceStatus] = useState(null)
   const [serviceError, setServiceError] = useState('')
   const [serviceLoading, setServiceLoading] = useState(false)
   const [transcripts, setTranscripts] = useState([])
   const [summaryData, setSummaryData] = useState({ summary: '', highlights: [], keywords: [] })
+  const [studyMonitor, setStudyMonitor] = useState(emptyMonitor)
+  const [diagnosticSession, setDiagnosticSession] = useState(emptyDiagnostic)
+  const [diagnosticAnswer, setDiagnosticAnswer] = useState('')
+  const [diagnosticHistory, setDiagnosticHistory] = useState([])
+  const [diagnosticLoading, setDiagnosticLoading] = useState(false)
+  const [diagnosticError, setDiagnosticError] = useState('')
+  const [diagnosticProfile, setDiagnosticProfile] = useState(null)
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [chatMessages, setChatMessages] = useState([
@@ -52,6 +79,8 @@ function App() {
       .join('\n')
   }, [transcripts])
 
+  const activePlan = useMemo(() => learningPlans.find((plan) => plan.accepted) || learningPlans[0] || learningPlan, [learningPlans, learningPlan])
+
   const activeSlot = useMemo(() => {
     const now = new Date()
     return (learningPlan.slots || []).find((slot) => {
@@ -70,26 +99,33 @@ function App() {
 
     async function loadDashboardData() {
       try {
-        const [statusResponse, transcriptResponse, summaryResponse, planResponse] = await Promise.all([
+        const [statusResponse, transcriptResponse, summaryResponse, plansResponse, planResponse, monitorResponse] = await Promise.all([
           fetch(`${API_BASE_URL}/services/status`),
           fetch(`${API_BASE_URL}/services/transcripts`),
           fetch(`${API_BASE_URL}/services/summary`),
+          fetch(`${API_BASE_URL}/learning/plans/${encodeURIComponent(authData.user.email)}`),
           fetch(`${API_BASE_URL}/learning/plan/${encodeURIComponent(authData.user.email)}`),
+          fetch(`${API_BASE_URL}/learning/monitor/${encodeURIComponent(authData.user.email)}`),
         ])
 
         const statusData = await statusResponse.json()
         const transcriptData = await transcriptResponse.json()
         const summary = await summaryResponse.json()
+        const plansPayload = await plansResponse.json()
         const plan = await planResponse.json()
+        const monitor = await monitorResponse.json()
 
-        if (!statusResponse.ok || !transcriptResponse.ok || !summaryResponse.ok || !planResponse.ok) {
+        if (!statusResponse.ok || !transcriptResponse.ok || !summaryResponse.ok || !plansResponse.ok || !planResponse.ok || !monitorResponse.ok) {
           throw new Error('Unable to load dashboard data')
         }
 
+        const plans = plansPayload.items || []
         setServiceStatus(statusData)
         setTranscripts(transcriptData.items || [])
         setSummaryData(summary)
-        setLearningPlan(plan)
+        setLearningPlans(plans)
+        setLearningPlan(plans[0] || plan)
+        setStudyMonitor(monitor)
         setServiceError('')
       } catch (error) {
         setServiceError(error.message || 'Unable to connect to backend services')
@@ -177,7 +213,7 @@ function App() {
       setAuthSuccess(data.message)
       setAuthData(data)
       setFormData(initialFormState)
-      setPage('schedule-type')
+      setPage('dashboard')
     } catch (requestError) {
       setAuthError(requestError.message || 'Unable to connect to the server')
     } finally {
@@ -192,10 +228,15 @@ function App() {
     setStartDate('')
     setEndDate('')
     setLearningPlan(emptyPlan)
+    setDiagnosticSession(emptyDiagnostic)
+    setDiagnosticAnswer('')
+    setDiagnosticHistory([])
+    setDiagnosticProfile(null)
+    setDiagnosticError('')
     setPage(type === 'short' ? 'goal-short' : 'goal-long')
   }
 
-  async function generatePlan(event) {
+  async function startDiagnostic(event) {
     event.preventDefault()
     if (!goalInput.trim() || !authData) {
       return
@@ -203,6 +244,38 @@ function App() {
 
     if (scheduleType === 'long' && (!startDate || !endDate)) {
       setPlanError('Please choose both a start date and an end date.')
+      return
+    }
+
+    setDiagnosticLoading(true)
+    setDiagnosticError('')
+    setPlanError('')
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/learning/diagnostic/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: authData.user.email,
+          goal: goalInput.trim(),
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.detail || 'Unable to start diagnostic')
+      }
+      setDiagnosticSession(data)
+      setDiagnosticHistory([])
+      setPage('diagnostic')
+    } catch (error) {
+      setDiagnosticError(error.message || 'Unable to start diagnostic')
+    } finally {
+      setDiagnosticLoading(false)
+    }
+  }
+
+  async function createLearningPlan(profile) {
+    if (!authData) {
       return
     }
 
@@ -218,6 +291,7 @@ function App() {
           schedule_type: scheduleType,
           start_date: scheduleType === 'long' ? startDate : null,
           end_date: scheduleType === 'long' ? endDate : null,
+          diagnostic_profile: profile,
         }),
       })
       const data = await response.json()
@@ -225,10 +299,64 @@ function App() {
         throw new Error(data.detail || 'Unable to create learning plan')
       }
       setLearningPlan(data)
+      setPage(scheduleType === 'short' ? 'goal-short' : 'goal-long')
     } catch (error) {
       setPlanError(error.message || 'Unable to create learning plan')
+      setPage(scheduleType === 'short' ? 'goal-short' : 'goal-long')
     } finally {
       setPlanLoading(false)
+    }
+  }
+
+  async function submitDiagnosticAnswer(event) {
+    event.preventDefault()
+    const answer = diagnosticAnswer.trim()
+    if (!answer || !diagnosticSession.session_id) {
+      return
+    }
+
+    setDiagnosticLoading(true)
+    setDiagnosticError('')
+
+    const currentQuestion = diagnosticSession.question
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/learning/diagnostic/answer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: diagnosticSession.session_id,
+          answer,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.detail || 'Unable to score diagnostic answer')
+      }
+
+      setDiagnosticHistory((current) => [...current, {
+        question: currentQuestion?.question || '',
+        answer,
+        score: data.last_score ?? null,
+        feedback: data.feedback || '',
+      }])
+      setDiagnosticAnswer('')
+
+      if (data.finished) {
+        setDiagnosticProfile(data)
+        await createLearningPlan(data)
+      } else {
+        setDiagnosticSession((current) => ({
+          ...current,
+          current_index: data.question_index - 1,
+          total_questions: data.total_questions,
+          question: data.question,
+        }))
+      }
+    } catch (error) {
+      setDiagnosticError(error.message || 'Unable to score diagnostic answer')
+    } finally {
+      setDiagnosticLoading(false)
     }
   }
 
@@ -348,6 +476,12 @@ function App() {
     setServiceStatus(null)
     setTranscripts([])
     setSummaryData({ summary: '', highlights: [], keywords: [] })
+    setStudyMonitor(emptyMonitor)
+    setDiagnosticSession(emptyDiagnostic)
+    setDiagnosticAnswer('')
+    setDiagnosticHistory([])
+    setDiagnosticProfile(null)
+    setDiagnosticError('')
     setChatMessages([{ role: 'assistant', content: 'Ask about the transcript or ask a general concept question. I will use transcript context when it helps and general knowledge when it does not.' }])
     setChatInput('')
     setSchedulePrompt(null)
@@ -392,9 +526,9 @@ function App() {
         <section className="auth-page planner-page">
           <p className="eyebrow">Today&apos;s Goal</p>
           <h1>{isLong ? 'Create a long-term learning calendar' : 'Create a study schedule for today'}</h1>
-          <p className="hero-copy">{isLong ? 'Describe the goal, choose your dates, and we will build a labeled calendar of work for each day.' : 'Tell the system what you want to learn today. It will identify the main topics, subtopics, and a realistic order for learning before asking you to accept the schedule.'}</p>
+          <p className="hero-copy">{isLong ? 'Describe the goal, choose your dates, and we will run a knowledge test before building a labeled calendar of work for each day.' : 'Tell the system what you want to learn today. It will first test your current knowledge from easy to hard, then build a schedule from the result.'}</p>
 
-          <form className="auth-form" onSubmit={generatePlan}>
+          <form className="auth-form" onSubmit={startDiagnostic}>
             <label>
               <span>What do you want to learn?</span>
               <textarea
@@ -420,8 +554,8 @@ function App() {
               </div>
             )}
 
-            <button className="submit-button" type="submit" disabled={planLoading}>
-              {planLoading ? 'Generating...' : 'Generate schedule'}
+            <button className="submit-button" type="submit" disabled={diagnosticLoading}>
+              {diagnosticLoading ? 'Starting test...' : 'Start knowledge test'}
             </button>
           </form>
 
@@ -433,6 +567,7 @@ function App() {
                   <h2>{learningPlan.goal}</h2>
                 </div>
               </div>
+              {diagnosticProfile?.summary && <p className="summary-copy">{diagnosticProfile.summary}</p>}
               {learningPlan.summary && <p className="summary-copy">{learningPlan.summary}</p>}
               <div className="slot-list light-surface">
                 {learningPlan.slots.map((slot) => (
@@ -457,13 +592,77 @@ function App() {
           )}
 
           {planError && <p className="message error">{planError}</p>}
+          {diagnosticError && <p className="message error">{diagnosticError}</p>}
+        </section>
+      </main>
+    )
+  }
+
+  if (page === 'diagnostic' && authData) {
+    const question = diagnosticSession.question
+    return (
+      <main className="auth-shell solo-auth">
+        <section className="auth-page planner-page diagnostic-card">
+          <p className="eyebrow">Knowledge Test</p>
+          <h1>{goalInput || 'Your topic'}</h1>
+          <p className="hero-copy">Answer each question as best as you can. The test starts easy and moves toward harder understanding so we can shape the schedule to your level.</p>
+
+          <div className="diagnostic-progress">
+            <span>Question {Math.min((diagnosticSession.current_index || 0) + 1, diagnosticSession.total_questions || 3)} of {diagnosticSession.total_questions || 3}</span>
+            <span className="monitor-pill">{diagnosticSession.finished ? 'Finished' : 'In progress'}</span>
+          </div>
+
+          {question && (
+            <form className="auth-form" onSubmit={submitDiagnosticAnswer}>
+              <label>
+                <span>{question.difficulty?.toUpperCase() || 'QUESTION'}</span>
+                <div className="diagnostic-question">{question.question}</div>
+              </label>
+              {question.hint && <p className="summary-copy">Hint: {question.hint}</p>}
+              <label>
+                <span>Your answer</span>
+                <textarea
+                  className="goal-input"
+                  value={diagnosticAnswer}
+                  onChange={(event) => setDiagnosticAnswer(event.target.value)}
+                  placeholder="Explain it in your own words"
+                  rows={4}
+                  required
+                />
+              </label>
+              <button className="submit-button" type="submit" disabled={diagnosticLoading}>
+                {diagnosticLoading ? 'Checking answer...' : 'Submit answer'}
+              </button>
+            </form>
+          )}
+
+          {diagnosticHistory.length > 0 && (
+            <div className="highlight-list">
+              {diagnosticHistory.map((item, index) => (
+                <div key={`${item.question}-${index}`} className="highlight-item">
+                  <strong>Q:</strong> {item.question}
+                  <br />
+                  <strong>A:</strong> {item.answer}
+                  <br />
+                  <strong>Score:</strong> {item.score ?? 'n/a'}
+                  <br />
+                  {item.feedback}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {diagnosticError && <p className="message error">{diagnosticError}</p>}
+          {planError && <p className="message error">{planError}</p>}
         </section>
       </main>
     )
   }
 
   if (page === 'dashboard' && authData) {
-    const isLong = learningPlan.schedule_type === 'long'
+    const displayedPlan = activePlan || learningPlan
+    const isLong = displayedPlan.schedule_type === 'long'
+    const monitorStatusClass = `monitor-${studyMonitor.status || 'idle'}`
     return (
       <main className="dashboard-shell workspace-layout">
         <section className="dashboard-topbar">
@@ -472,7 +671,10 @@ function App() {
             <h1 className="dashboard-title">Welcome, {authData.user.name}</h1>
             {activeSlot && <p className="hero-copy">Current slot: {activeSlot.topic} until {formatTime(activeSlot.end_at)}</p>}
           </div>
-          <button type="button" className="ghost-button" onClick={logout}>Logout</button>
+          <div className="topbar-actions">
+            <button type="button" className="ghost-button" onClick={() => setPage('schedule-type')}>Create Schedule</button>
+            <button type="button" className="ghost-button" onClick={logout}>Logout</button>
+          </div>
         </section>
 
         <section className="schedule-card summary-card">
@@ -482,9 +684,9 @@ function App() {
               <h2>{learningPlan.goal || 'No goal loaded'}</h2>
             </div>
           </div>
-          {learningPlan.summary && <p className="summary-copy">{learningPlan.summary}</p>}
+          {displayedPlan.summary && <p className="summary-copy">{displayedPlan.summary}</p>}
           <div className="slot-list">
-            {(learningPlan.slots || []).map((slot) => (
+            {(displayedPlan.slots || []).map((slot) => (
               <div key={slot.slot_id} className={`slot-item ${activeSlot?.slot_id === slot.slot_id ? 'active-slot' : ''}`}>
                 <strong>{isLong ? `${slot.date} - ${slot.topic}` : slot.topic}</strong>
                 {slot.description && <span>{slot.description}</span>}
@@ -499,6 +701,25 @@ function App() {
                 <small>Status: {slot.status}</small>
               </div>
             ))}
+          </div>
+
+          <div className="history-panel">
+            <div className="card-header">
+              <div>
+                <p className="eyebrow">Created schedules</p>
+                <h2>All plans</h2>
+              </div>
+            </div>
+            <div className="history-list">
+              {(learningPlans.length > 0 ? learningPlans : [displayedPlan]).map((plan) => (
+                <div key={`${plan.plan_date}-${plan.created_at}`} className={`history-item ${plan.plan_date === displayedPlan.plan_date ? 'active-history' : ''}`}>
+                  <strong>{plan.goal || 'Untitled plan'}</strong>
+                  <span>{plan.schedule_type === 'long' ? 'Long term' : 'Short term'} · {plan.accepted ? 'accepted' : 'draft'}</span>
+                  <small>{plan.created_at ? new Date(plan.created_at).toLocaleString() : 'Recently created'}</small>
+                  {plan.summary && <p>{plan.summary}</p>}
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -532,6 +753,32 @@ function App() {
           </label>
 
           {serviceError && <p className="message error">{serviceError}</p>}
+        </section>
+
+        <section className={`summary-card monitor-card ${monitorStatusClass}`}>
+          <div className="card-header">
+            <div>
+              <p className="eyebrow">Study Monitor</p>
+              <h2>{studyMonitor.active_slot?.topic || 'No active topic'}</h2>
+            </div>
+            <div className="monitor-pill">{studyMonitor.status || 'idle'} · {(studyMonitor.score ?? 0).toFixed(2)}</div>
+          </div>
+          <p className="summary-copy">{studyMonitor.message || 'The monitor will compare transcript content with the active learning topic.'}</p>
+          <div className="keyword-row">
+            {(studyMonitor.matched_terms || []).map((term) => <span key={`matched-${term}`} className="keyword-chip">{term}</span>)}
+          </div>
+          {(studyMonitor.missing_terms || []).length > 0 && (
+            <div className="highlight-list">
+              <div className="highlight-item">
+                <strong>Missing signals:</strong> {(studyMonitor.missing_terms || []).join(', ')}
+              </div>
+            </div>
+          )}
+          {(studyMonitor.evidence || []).length > 0 && (
+            <div className="highlight-list">
+              {(studyMonitor.evidence || []).map((line, index) => <div key={`evidence-${index}`} className="highlight-item">{line}</div>)}
+            </div>
+          )}
         </section>
 
         <section className="summary-card">
@@ -619,3 +866,18 @@ function App() {
 }
 
 export default App
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

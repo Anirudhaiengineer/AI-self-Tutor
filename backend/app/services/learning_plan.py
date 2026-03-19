@@ -1,9 +1,10 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import os
 import re
 from datetime import date, datetime, timedelta
+from statistics import mean
 from uuid import uuid4
 
 try:
@@ -28,8 +29,10 @@ class LearningPlanService:
         schedule_type: str = 'short',
         start_date: date | None = None,
         end_date: date | None = None,
+        diagnostic_profile: dict[str, object] | None = None,
     ) -> dict[str, object]:
-        outline = self._build_outline(goal)
+        profile = self._normalize_diagnostic_profile(diagnostic_profile)
+        outline = self._build_outline(goal, profile)
         now = datetime.now().replace(second=0, microsecond=0)
 
         if schedule_type == 'long':
@@ -37,10 +40,10 @@ class LearningPlanService:
                 raise ValueError('Start date and end date are required for long-term schedules')
             if end_date < start_date:
                 raise ValueError('End date must be on or after start date')
-            calendar_entries = self._build_long_term_calendar(outline['modules'], start_date, end_date)
+            calendar_entries = self._build_long_term_calendar(outline['modules'], start_date, end_date, profile)
             plan_date = start_date.isoformat()
         else:
-            calendar_entries = self._build_short_term_calendar(outline['modules'], now + timedelta(minutes=5))
+            calendar_entries = self._build_short_term_calendar(outline['modules'], now + timedelta(minutes=5), profile)
             plan_date = now.date().isoformat()
 
         plan = {
@@ -53,6 +56,7 @@ class LearningPlanService:
             'accepted': False,
             'summary': outline['summary'],
             'modules': outline['modules'],
+            'diagnostic_profile': profile,
             'calendar': calendar_entries,
             'slots': calendar_entries,
             'created_at': now.isoformat(),
@@ -68,6 +72,10 @@ class LearningPlanService:
 
     def get_plan(self, email: str) -> dict[str, object] | None:
         return learning_plans_collection.find_one({'email': email.lower()}, {'_id': 0}, sort=[('created_at', -1)])
+
+    def list_plans(self, email: str) -> list[dict[str, object]]:
+        cursor = learning_plans_collection.find({'email': email.lower()}, {'_id': 0}).sort('created_at', -1)
+        return list(cursor)
 
     def accept_plan(self, email: str) -> dict[str, object] | None:
         plan = self.get_plan(email)
@@ -131,12 +139,37 @@ class LearningPlanService:
             return None
         return OpenAI(base_url=self.base_url, api_key=self.api_key)
 
-    def _build_outline(self, goal: str) -> dict[str, object]:
-        fallback = self._fallback_outline(goal)
+    def _normalize_diagnostic_profile(self, diagnostic_profile: dict[str, object] | None) -> dict[str, object]:
+        if not diagnostic_profile:
+            return {
+                'average_score': 0.0,
+                'proficiency_level': 'intermediate',
+                'focus_mode': 'balanced concept and practice',
+                'summary': '',
+            }
+
+        average_score = diagnostic_profile.get('average_score', 0.0)
+        try:
+            average_score_value = float(average_score)
+        except (TypeError, ValueError):
+            average_score_value = 0.0
+
+        proficiency_level = str(diagnostic_profile.get('proficiency_level', 'intermediate'))
+        focus_mode = str(diagnostic_profile.get('focus_mode', 'balanced concept and practice'))
+        summary = str(diagnostic_profile.get('summary', '')).strip()
+        return {
+            'average_score': average_score_value,
+            'proficiency_level': proficiency_level,
+            'focus_mode': focus_mode,
+            'summary': summary,
+        }
+
+    def _build_outline(self, goal: str, diagnostic_profile: dict[str, object] | None = None) -> dict[str, object]:
+        fallback = self._fallback_outline(goal, diagnostic_profile)
         if not self.client:
             return fallback
 
-        prompt = self._build_outline_prompt(goal)
+        prompt = self._build_outline_prompt(goal, diagnostic_profile)
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -145,16 +178,18 @@ class LearningPlanService:
             content = response.choices[0].message.content or ''
             parsed = self._parse_outline(content)
             if parsed:
-                return parsed
+                return self._enrich_outline(parsed, diagnostic_profile)
         except Exception:
             pass
 
         return fallback
 
-    def _build_outline_prompt(self, goal: str) -> str:
+    def _build_outline_prompt(self, goal: str, diagnostic_profile: dict[str, object] | None) -> str:
+        profile_text = json.dumps(diagnostic_profile or {}, ensure_ascii=False)
         return '\n'.join([
             'You are a study planner.',
             'Break the user goal into a deep learning outline with major topics and subtopics.',
+            'Use the diagnostic profile to tune the depth and pacing.',
             'Return ONLY valid JSON with this structure:',
             '{',
             '  "summary": "short overview",',
@@ -174,6 +209,7 @@ class LearningPlanService:
             '4. Use practical ordering from fundamentals to practice.',
             '5. The plan should reflect the exact goal, not generic filler.',
             '',
+            f'Diagnostic profile: {profile_text}',
             f'User goal: {goal}',
         ])
 
@@ -218,7 +254,37 @@ class LearningPlanService:
             'modules': cleaned_modules,
         }
 
-    def _fallback_outline(self, goal: str) -> dict[str, object]:
+    def _enrich_outline(self, outline: dict[str, object], diagnostic_profile: dict[str, object] | None) -> dict[str, object]:
+        profile = self._normalize_diagnostic_profile(diagnostic_profile)
+        level = profile['proficiency_level']
+        score = profile['average_score']
+        modules = []
+        for module in outline['modules']:
+            enriched = dict(module)
+            base_minutes = int(enriched.get('estimated_minutes', 60) or 60)
+            if level == 'beginner':
+                enriched['estimated_minutes'] = max(35, min(120, int(base_minutes * 0.75)))
+                enriched['description'] = f"{enriched['description']} Include more revision and worked examples."
+            elif level == 'advanced':
+                enriched['estimated_minutes'] = max(45, min(150, int(base_minutes * 1.1)))
+                enriched['description'] = f"{enriched['description']} Focus more on edge cases and applications."
+            else:
+                enriched['estimated_minutes'] = base_minutes
+            enriched['description'] = enriched['description'] or f"Focus on {enriched['title'].lower()}"
+            modules.append(enriched)
+
+        summary_suffix = {
+            'beginner': 'Start with foundations and repeated practice.',
+            'advanced': 'Move quickly through basics and spend more time on application.',
+        }.get(level, 'Use a balanced pace with concept review and practice.')
+
+        return {
+            'summary': f"{outline['summary']} {summary_suffix} Diagnostic score: {score:.0f}/100.",
+            'modules': modules,
+        }
+
+    def _fallback_outline(self, goal: str, diagnostic_profile: dict[str, object] | None = None) -> dict[str, object]:
+        profile = self._normalize_diagnostic_profile(diagnostic_profile)
         normalized_goal = goal.strip().rstrip('.')
         keywords = [part.strip() for part in re.split(r',|;| and | then | after ', normalized_goal) if part.strip()]
         if not keywords:
@@ -227,6 +293,11 @@ class LearningPlanService:
         modules = []
         for index, keyword in enumerate(keywords[:5], start=1):
             title = keyword[:1].upper() + keyword[1:] if keyword else f'Topic {index}'
+            estimated_minutes = 60
+            if profile['proficiency_level'] == 'beginner':
+                estimated_minutes = 45
+            elif profile['proficiency_level'] == 'advanced':
+                estimated_minutes = 75
             modules.append({
                 'title': title,
                 'description': f'Build understanding of {title.lower()} from basics to practice.',
@@ -235,7 +306,7 @@ class LearningPlanService:
                     f'{title} core ideas',
                     f'{title} practice questions',
                 ],
-                'estimated_minutes': 60,
+                'estimated_minutes': estimated_minutes,
             })
 
         if not modules:
@@ -246,14 +317,26 @@ class LearningPlanService:
                 'estimated_minutes': 60,
             }]
 
+        summary = f'Focus on {normalized_goal} with conceptual understanding, examples, and practice.'
+        if profile['proficiency_level'] == 'beginner':
+            summary += ' Keep the pace slower and review basics often.'
+        elif profile['proficiency_level'] == 'advanced':
+            summary += ' Move faster through foundations and spend more time on application.'
+
         return {
-            'summary': f'Focus on {normalized_goal} with conceptual understanding, examples, and practice.',
+            'summary': summary,
             'modules': modules,
         }
 
-    def _build_short_term_calendar(self, modules: list[dict[str, object]], start_time: datetime) -> list[dict[str, object]]:
+    def _build_short_term_calendar(
+        self,
+        modules: list[dict[str, object]],
+        start_time: datetime,
+        diagnostic_profile: dict[str, object] | None = None,
+    ) -> list[dict[str, object]]:
         slots = []
         current_start = start_time
+        pace_gap = self._pace_gap(diagnostic_profile)
 
         for index, module in enumerate(modules, start=1):
             duration_minutes = int(module.get('estimated_minutes', 60) or 60)
@@ -269,15 +352,22 @@ class LearningPlanService:
                 'end_at': end_time.isoformat(),
                 'status': 'pending',
             })
-            current_start = end_time + timedelta(minutes=10)
+            current_start = end_time + timedelta(minutes=pace_gap)
 
         return slots
 
-    def _build_long_term_calendar(self, modules: list[dict[str, object]], start_date: date, end_date: date) -> list[dict[str, object]]:
+    def _build_long_term_calendar(
+        self,
+        modules: list[dict[str, object]],
+        start_date: date,
+        end_date: date,
+        diagnostic_profile: dict[str, object] | None = None,
+    ) -> list[dict[str, object]]:
         slots = []
         current_date = start_date
         module_index = 0
         total_days = (end_date - start_date).days + 1
+        pace_gap = self._pace_gap(diagnostic_profile)
 
         while current_date <= end_date:
             module = modules[module_index % len(modules)]
@@ -300,7 +390,20 @@ class LearningPlanService:
             current_date += timedelta(days=1)
             module_index += 1
 
+        if pace_gap > 10:
+            for slot in slots:
+                slot['estimated_minutes'] = max(30, int(slot.get('estimated_minutes', 60) * 0.9))
+
         return slots
+
+    def _pace_gap(self, diagnostic_profile: dict[str, object] | None) -> int:
+        profile = self._normalize_diagnostic_profile(diagnostic_profile)
+        score = float(profile['average_score'])
+        if score >= 75:
+            return 5
+        if score >= 50:
+            return 10
+        return 15
 
     def _shift_following_slots(self, slots: list[dict[str, object]], slot_id: str, delta: timedelta) -> None:
         shift_started = False
@@ -311,3 +414,4 @@ class LearningPlanService:
             if shift_started and item['status'] != 'completed':
                 item['start_at'] = (datetime.fromisoformat(item['start_at']) + delta).isoformat()
                 item['end_at'] = (datetime.fromisoformat(item['end_at']) + delta).isoformat()
+
