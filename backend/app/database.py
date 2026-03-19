@@ -18,3 +18,4 @@ diagnostic_sessions_collection: Collection = database['diagnostic_sessions']
 users_collection.create_index('email', unique=True)
 learning_plans_collection.create_index([('email', 1), ('plan_date', 1)], unique=True)
 diagnostic_sessions_collection.create_index('session_id', unique=True)
+

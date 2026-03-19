@@ -51,6 +51,7 @@ function App() {
   const [serviceLoading, setServiceLoading] = useState(false)
   const [transcripts, setTranscripts] = useState([])
   const [summaryData, setSummaryData] = useState({ summary: '', highlights: [], keywords: [] })
+  const [studyNotes, setStudyNotes] = useState([])
   const [studyMonitor, setStudyMonitor] = useState(emptyMonitor)
   const [diagnosticSession, setDiagnosticSession] = useState(emptyDiagnostic)
   const [diagnosticAnswer, setDiagnosticAnswer] = useState('')
@@ -103,6 +104,7 @@ function App() {
           fetch(`${API_BASE_URL}/services/status`),
           fetch(`${API_BASE_URL}/services/transcripts`),
           fetch(`${API_BASE_URL}/services/summary`),
+          fetch(`${API_BASE_URL}/services/notes/${encodeURIComponent(authData.user.email)}`),
           fetch(`${API_BASE_URL}/learning/plans/${encodeURIComponent(authData.user.email)}`),
           fetch(`${API_BASE_URL}/learning/plan/${encodeURIComponent(authData.user.email)}`),
           fetch(`${API_BASE_URL}/learning/monitor/${encodeURIComponent(authData.user.email)}`),
@@ -111,11 +113,12 @@ function App() {
         const statusData = await statusResponse.json()
         const transcriptData = await transcriptResponse.json()
         const summary = await summaryResponse.json()
+        const notesPayload = await notesResponse.json()
         const plansPayload = await plansResponse.json()
         const plan = await planResponse.json()
         const monitor = await monitorResponse.json()
 
-        if (!statusResponse.ok || !transcriptResponse.ok || !summaryResponse.ok || !plansResponse.ok || !planResponse.ok || !monitorResponse.ok) {
+        if (!statusResponse.ok || !transcriptResponse.ok || !summaryResponse.ok || !notesResponse.ok || !plansResponse.ok || !planResponse.ok || !monitorResponse.ok) {
           throw new Error('Unable to load dashboard data')
         }
 
@@ -123,6 +126,7 @@ function App() {
         setServiceStatus(statusData)
         setTranscripts(transcriptData.items || [])
         setSummaryData(summary)
+        setStudyNotes(notesPayload.items || [])
         setLearningPlans(plans)
         setLearningPlan(plans[0] || plan)
         setStudyMonitor(monitor)
@@ -476,6 +480,7 @@ function App() {
     setServiceStatus(null)
     setTranscripts([])
     setSummaryData({ summary: '', highlights: [], keywords: [] })
+    setStudyNotes([])
     setStudyMonitor(emptyMonitor)
     setDiagnosticSession(emptyDiagnostic)
     setDiagnosticAnswer('')
@@ -723,6 +728,30 @@ function App() {
           </div>
         </section>
 
+        <section className="summary-card notes-card">
+          <div className="card-header">
+            <div>
+              <p className="eyebrow">Listening Notes</p>
+              <h2>Saved keypoints</h2>
+            </div>
+          </div>
+          <p className="summary-copy">{summaryData.summary || 'A summary will appear after transcript content is available.'}</p>
+          <div className="keyword-row">
+            {(summaryData.keywords || []).map((keyword) => <span key={keyword} className="keyword-chip">{keyword}</span>)}
+          </div>
+          <div className="highlight-list">
+            {(studyNotes || []).map((note) => (
+              <div key={note.note_id} className="highlight-item">
+                <strong>{note.title}</strong>
+                <p>{note.summary}</p>
+                <div className="keyword-row">
+                  {(note.keypoints || []).map((point) => <span key={`${note.note_id}-${point}`} className="keyword-chip">{point}</span>)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <section className="transcript-panel recorder-card">
           <div className="recorder-header">
             <div>
@@ -779,22 +808,6 @@ function App() {
               {(studyMonitor.evidence || []).map((line, index) => <div key={`evidence-${index}`} className="highlight-item">{line}</div>)}
             </div>
           )}
-        </section>
-
-        <section className="summary-card">
-          <div className="card-header">
-            <div>
-              <p className="eyebrow">RAG Summary</p>
-              <h2>Transcript snapshot</h2>
-            </div>
-          </div>
-          <p className="summary-copy">{summaryData.summary || 'A summary will appear after transcript content is available.'}</p>
-          <div className="keyword-row">
-            {(summaryData.keywords || []).map((keyword) => <span key={keyword} className="keyword-chip">{keyword}</span>)}
-          </div>
-          <div className="highlight-list">
-            {(summaryData.highlights || []).map((item, index) => <div key={`${item}-${index}`} className="highlight-item">{item}</div>)}
-          </div>
         </section>
 
         <section className="chat-card">
@@ -866,6 +879,14 @@ function App() {
 }
 
 export default App
+
+
+
+
+
+
+
+
 
 
 
